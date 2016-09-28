@@ -48,11 +48,11 @@ class ChurnPredictorDriver(args: Array[String]) extends Serializable with Logs {
   var instances: RDD[SmartStringArray] = null
 
   try {
-    instances = SmartStringArray.tableFromTextFile("/user/odia/mackenzie/", ',', sc)
+    instances = SmartStringArray.tableFromTextFile("/user/odia/mackenzie/forecast/data", ',', sc)
 
   } catch {
     case e: Exception =>
-      fatal("An error occurred while loading the instances in the driver. Terminating the driver process.", e)
+      fatal("An error occurred while loading the instances in the driver. Terminating ...", e)
       System.exit(-1)
   }
 
