@@ -194,5 +194,9 @@ public class AdvisorDataSetIterator implements DataSetIterator {
 	public int totalOutcomes() { // TODO
 		return 1;
 	}
+	
+	public void remove() {
+		
+	}
 
 }

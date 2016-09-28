@@ -56,28 +56,22 @@ class ChurnPredictorDriver(args: Array[String]) extends Serializable with Logs {
       System.exit(-1)
   }
 
-  val dataset = instances.map { x => (x.toArray.toList.head, x.toArray.toList.tail) }.groupByKey().sortByKey(true)
+  val dataset = instances.map { x => (x.toArray.toList.head, x.toArray.toList.tail.mkString(",")) }
+    .groupByKey().sortByKey(true)
 
-  val labeledPoints = dataset.map { f =>
-    val instances: List[List[String]] = List()
-    (0 until f._2.toList.size - 1).foreach { i =>
-      instances +: (f._2.toList +: f._2.toList(i + 1).reverse.head)
-    }
-    (f._1, instances.toIterable)
-  }
-
-  val predict = dataset.map(f => (f._1, f._2.map { x => x.filter { date => date == "201605" } }))
+  val predict = dataset.map(f => (f._1, f._2.filter { x => x.contains("201605") }))
     .map(f => (f._1, f._2.map { x => x.reverse.tail.reverse }))
   val training = dataset.subtract(predict)
 
-  training.sortByKey(true).map { x =>
-    sc.parallelize(x._2.toList.reverse.tail.reverse).repartition(1) // coalesce(1,true)
-      .saveAsTextFile("/user/odia/mackenzie/forecast/train/" + x._1)
-  }
-  predict.sortByKey(true).map { x =>
-    sc.parallelize(x._2.toList.reverse.tail.reverse).repartition(1) // coalesce(1,true)
-      .saveAsTextFile("/user/odia/mackenzie/forecast/test/" + x._1)
-  }
+  val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+  import sqlContext.implicits._
+  import org.apache.spark.sql.functions._
+
+  training.map(f => f._2.map { x => (f._1, x) }).flatMap(f => f)
+    .toDF("key", "value").write.partitionBy("key").save("/user/odia/mackenzie/forecast/train")
+
+  predict.map(f => f._2.map { x => (f._1, x) }).flatMap(f => f)
+    .toDF("key", "value").write.partitionBy("key").save("/user/odia/mackenzie/forecast/test")
 
   val predictor = new ChurnPredictor(batchSize = 20,
     featureSize = 86,
