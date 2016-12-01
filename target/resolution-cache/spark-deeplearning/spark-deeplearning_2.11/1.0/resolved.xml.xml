@@ -4,7 +4,7 @@
 		module="spark-deeplearning_2.11"
 		revision="1.0"
 		status="integration"
-		publication="20160926142801"
+		publication="20161201163422"
 	>
 		<description>
 		spark-deeplearning
@@ -34,7 +34,15 @@
 	<dependencies>
 		<dependency org="org.scala-lang" name="scala-compiler" rev="2.11.8" conf="scala-tool->default,optional(default)"/>
 		<dependency org="org.scala-lang" name="scala-library" rev="2.11.8" conf="scala-tool->default,optional(default);compile->default(compile)"/>
+		<dependency org="org.javassist" name="javassist" rev="3.20.0-GA" conf="compile->default(compile)"/>
 		<dependency org="org.deeplearning4j" name="dl4j-spark-nlp_2.11" rev="0.6.0" conf="compile->default(compile)"/>
-		<dependency org="org.nd4j" name="nd4j-native" rev="0.6.0" conf="compile->default(compile)"/>
+		<dependency org="org.deeplearning4j" name="dl4j-spark_2.11" rev="0.6.0" conf="compile->default(compile)"/>
+		<dependency org="org.nd4j" name="nd4j-native-platform" rev="0.6.0" conf="compile->default(compile)"/>
+		<dependency org="org.springframework" name="spring-core" rev="4.3.3.RELEASE" conf="compile->default(compile)"/>
+		<dependency org="org.apache.spark" name="spark-core_2.11" rev="2.0.0" conf="compile->default(compile)"/>
+		<dependency org="org.apache.spark" name="spark-sql_2.11" rev="2.0.0" conf="compile->default(compile)"/>
+		<dependency org="com.typesafe" name="config" rev="1.2.1" conf="compile->default(compile)"/>
+		<dependency org="org.scalatest" name="scalatest_2.11" rev="2.1.3" conf="test->default(compile)"/>
+		<dependency org="junit" name="junit" rev="4.10" conf="compile->default(compile)"/>
 	</dependencies>
 </ivy-module>

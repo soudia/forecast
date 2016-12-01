@@ -6,63 +6,62 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Stack;
+import java.util.StringTokenizer;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.LineIterator;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.DataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.gale.alchemy.conf.Configs;
 
-public class AdvisorDataSetIterator implements DataSetIterator {
+public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataSetIterator {
 
 	private static final long serialVersionUID = -8938692790057042187L;
 
 	private int cursor = 0;
 	private int vectorSize = 0;
+	private int labelSize = 0;
+	private int numRows;
+	private int position = 0;
 	private final int batchSize;
 
-	private volatile FileSystem fs;
 	private volatile String hdfsUrl;
-	protected volatile RemoteIterator<LocatedFileStatus> hdfsIterator;
+	private List<String> advisors = new ArrayList<String>();
+	private List<String> exclude = new ArrayList<String>();
+	
 
-	private static final String HDFS_URL  = "hdfs://nn-galepartners.s3s.altiscale.com:8020";
-	private static final String DATA_DIR  = "/user/odia/mackenzie/forecast/";
-	private static final String CORE_SITE = "/etc/hadoop/conf/core-site.xml";
-	private static final String HDFS_SITE = "/etc/hadoop/conf/hdfs-site.xml";
+	private List<Integer> featureInd = new ArrayList<Integer>();
+
+	private static final Logger LOG = LoggerFactory.getLogger(AdvisorDataSetIterator.class);
 
 	public AdvisorDataSetIterator(int batchSize, boolean train) {
 		this(DATA_DIR, batchSize, train);
 	}
 
 	public AdvisorDataSetIterator(String dataDirectory, int batchSize, boolean train) {
+		this(dataDirectory, batchSize, train, 71, 1);
+	}
+
+  	public AdvisorDataSetIterator(String dataDirectory, int batchSize, boolean train, int vectorSize, int labelSize) {
+		super(HDFS_URL + dataDirectory + (train ? "/train" : "/test"));
 		this.batchSize = batchSize;
 		int pos = dataDirectory.lastIndexOf("/");
 		dataDirectory = (pos > -1 ? dataDirectory.substring(0, pos) : dataDirectory);
-		this.hdfsUrl = HDFS_URL + dataDirectory + (train ? "train/" : "test/");
-		initialize();
+		numRows = train ? 16 : 1;
+		this.vectorSize = vectorSize;
+		this.labelSize = labelSize;
 	}
 
-	private void initialize() {
-		Configuration configuration = new Configuration();
-		configuration.addResource(new Path(CORE_SITE));
-		configuration.addResource(new Path(HDFS_SITE));
-
-		configuration.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-		configuration.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-
-		try {
-			fs = FileSystem.get(configuration);
-			hdfsIterator = fs.listFiles(new Path(hdfsUrl), true);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+	public void setExclude(List<String> exclude) {
+		this.exclude = exclude == null || exclude.isEmpty() ? new ArrayList<String>() : exclude;
 	}
 
 	@Override
@@ -120,46 +119,89 @@ public class AdvisorDataSetIterator implements DataSetIterator {
 		}
 	}
 
+	private boolean toExclude(Path path) {
+		if (exclude == null || exclude.isEmpty()) return false;
+		if (path == null) return true;
+		String p = path.toUri().getPath();
+		StringTokenizer pathTokens = new StringTokenizer(p, "/");
+		String index = null;
+		while (pathTokens.hasMoreTokens()) {
+			index = pathTokens.nextToken();
+		}
+		return exclude.contains(index);
+	} 
+
+	private void populate(INDArray features, INDArray labels, Path path) throws IOException {
+		Reader reader = new InputStreamReader(fs.open(path));
+		LineIterator iter = IOUtils.lineIterator(reader);
+		try {
+			while (iter.hasNext()) {
+				String content = iter.next();
+				String[] tokens = iter.nextLine().split(",");
+				int j = 0;
+				int col = 0;
+				for (; j < Math.min(vectorSize, tokens.length - 1); j++) {
+					features.put(position, j, Double.valueOf(tokens[j].replace("\"", "").trim()).doubleValue());
+				}
+				for (; j < tokens.length && col < labelSize; j++) {
+					labels.putScalar(position, col++, Double.valueOf(tokens[j].replace("\"", "").trim()).doubleValue());
+				}
+				position--;
+			}
+			cursor++;
+		} catch (Exception e) {
+
+		}
+		iter.close();
+	}
+
 	private DataSet nextDataSet(int num) throws IOException {
 		List<List<Double>> instances = new ArrayList<List<Double>>(num);
 		List<Double> targets = new ArrayList<Double>();
+		
+		INDArray labels = Nd4j.create(numRows, labelSize); // one class
+		INDArray features = Nd4j.create(numRows, vectorSize);
+		position = numRows - 1;
+		
+		Stack<Path> stack = new Stack<Path>();
+		String previousPath = "";
 
 		for (int i = 0; i < num && hdfsIterator.hasNext(); i++) {
-
+			
 			LocatedFileStatus next = hdfsIterator.next();
 			Path path = next.getPath();
+			
+			String currentPath = path.toUri().getPath();
+			String index = getRelativeFilename(currentPath);
 
-			Reader reader = new InputStreamReader(fs.open(path));
-			LineIterator iter = IOUtils.lineIterator(reader);
-			while (iter.hasNext()) {
-				String[] tokens = iter.next().split(",");
-				List<Double> features = new ArrayList<Double>();
-				int j = 0;
-				for (; j < tokens.length - 1; j++) {
-					features.add(Double.valueOf(tokens[j].trim()));
+			if (previousPath.contains(index.split("_")[0])) {
+				if (i >= num || !hdfsIterator.hasNext()) {
+					String p = stack.peek() == null ? "" : stack.peek().toUri().toString();
+					if (p.contains(index.split("_")[0])) {
+						stack.push(path);
+						while (!stack.isEmpty()) {
+							populate(features, labels, stack.pop());
+						}
+					} else {
+						labels = Nd4j.create(labelSize);//(numRows, labelSize);
+						features = Nd4j.create(vectorSize);//(numRows, vectorSize);
+						populate(features, labels, path);
+					}
+				} else {
+					stack.push(path);
+				}			
+				previousPath = currentPath;
+			} else {
+				labels = Nd4j.create(labelSize);//(numRows, labelSize);
+				features = Nd4j.create(vectorSize);//(numRows, vectorSize);
+				while (!stack.isEmpty()) {
+					populate(features, labels, stack.pop());
 				}
-				instances.add(features);
-				targets.add(Double.valueOf(tokens[j].trim()));
+				previousPath = currentPath;
+				stack.push(path);
 			}
-			cursor++;
 		}
-
-		vectorSize = instances.get(0).size(); // number of features
-		INDArray labels = Nd4j.create(instances.size(), 1, vectorSize); // one
-																		// class
-		INDArray features = Nd4j.create(instances.size(), vectorSize, vectorSize);
-
-		for (int i = 0; i < instances.size(); i++) {
-			List<Double> instance = instances.get(i);
-			INDArray array = Nd4j.create(instance.size());
-			for (int j = 0; j < instance.size(); j++) {
-				array.putScalar(j, instance.get(j));
-			}
-			features.put(i, array);
-			labels.putScalar(i, targets.get(i));
-		}
-
-		return new DataSet(features, labels);
+		return new DataSet(features, labels);//, null, labelsMask);
 	}
 
 	@Override
@@ -180,6 +222,10 @@ public class AdvisorDataSetIterator implements DataSetIterator {
 	public boolean resetSupported() { // TODO
 		return false;
 	}
+	
+	public List<String> getAdvisors() {
+		return advisors;
+	}
 
 	@Override
 	public void setPreProcessor(DataSetPreProcessor processor) {
@@ -192,7 +238,7 @@ public class AdvisorDataSetIterator implements DataSetIterator {
 
 	@Override
 	public int totalOutcomes() { // TODO
-		return 1;
+		return labelSize;
 	}
 	
 	public void remove() {

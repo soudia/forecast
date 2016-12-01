@@ -1,0 +1,1 @@
+hadoop fs -rm -r /user/odia/mackenzie/dl4j/* && hadoop fs -rm -r /user/odia/.Trash/* && hadoop fs -rm -r /user/odia/mackenzie/lstm_recos/testIDs && hadoop fs -rm -r /user/odia/mackenzie/lstm_recos/rslts 
