@@ -150,4 +150,3 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 		throw new UnsupportedOperationException("Remove not yet supported");
 	}
 }
->>>>>>> 8190ec2 Committing new changes
