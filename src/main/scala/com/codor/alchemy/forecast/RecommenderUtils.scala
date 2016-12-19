@@ -1,4 +1,4 @@
-package com.gale.alchemy.forecast
+package com.codor.alchemy.forecast
 
 import java.io.DataOutputStream
 import java.nio.file.Files
@@ -13,9 +13,9 @@ import org.deeplearning4j.nn.graph.ComputationGraph
 import org.deeplearning4j.spark.impl.graph.SparkComputationGraph
 import org.nd4j.linalg.factory.Nd4j
 
-import com.gale.alchemy.conf.Constants
-import com.gale.alchemy.forecast.utils.Logs
-import com.gale.alchemy.forecast.utils.SmartStringArray
+import com.codor.alchemy.conf.Constants
+import com.codor.alchemy.forecast.utils.Logs
+import com.codor.alchemy.forecast.utils.SmartStringArray
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 

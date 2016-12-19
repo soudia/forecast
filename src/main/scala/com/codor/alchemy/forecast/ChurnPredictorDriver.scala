@@ -1,4 +1,4 @@
-package com.gale.alchemy.forecast
+package com.codor.alchemy.forecast
 
 import scala.reflect.runtime.universe
 
@@ -9,8 +9,8 @@ import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
-import com.gale.alchemy.forecast.utils.Logs
-import com.gale.alchemy.forecast.utils.SmartStringArray
+import com.codor.alchemy.forecast.utils.Logs
+import com.codor.alchemy.forecast.utils.SmartStringArray
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 
@@ -48,9 +48,9 @@ class ChurnPredictorDriver(args: Array[String]) extends Serializable with Logs {
   var exclude: RDD[String] = null
 
   try {
-    instances = SmartStringArray.tableFromTextFile("/user/odia/mackenzie/forecast/data", ',', sc)
-    exclude = SmartStringArray.tableFromTextFile("/user/odia/mackenzie/forecast/ignore", ',', sc)
-	.map(f => f.toArray(0))
+    instances = SmartStringArray.tableFromTextFile("/user/myhome/myfolder/forecast/data", ',', sc)
+    exclude = SmartStringArray.tableFromTextFile("/user/myhome/myfolder/forecast/ignore", ',', sc)
+      .map(f => f.toArray(0))
   } catch {
     case e: Exception =>
       fatal("An error occurred while loading the instances in the driver. Terminating ...", e)
@@ -73,32 +73,30 @@ class ChurnPredictorDriver(args: Array[String]) extends Serializable with Logs {
     numberOfAveragings = 3,
     learningRate = 0.003, //0.0018,
     l2Regularization = 1e-5,
-    dataDirectory = "/user/odia/mackenzie/forecast/", 
+    dataDirectory = "/user/myhome/myfolder/forecast/",
     sc,
     exclude)
 
   val net = predictor.train()
   val predictions = predictor.predict(net).zipWithIndex().map(f => (f._2, f._1))
 
-  predictions.saveAsTextFile("/user/odia/mackenzie/forecast/at_risk_rslts")
+  predictions.saveAsTextFile("/user/myhome/myfolder/forecast/at_risk_rslts")
   //dataset.zipWithIndex().map(f => (f._2, f._1)).join(predictions)
   //  .map(f => f._2._1 + f._2._2.mkString(","))//.saveAsTextFile("/user/hduser/forecast/rslts")
-  //  .saveAsTextFile("/user/odia/mackenzie/forecast/rslts")
+  //  .saveAsTextFile("/user/myhome/myfolder/forecast/rslts")
 
   //val targets = predict.map(f => (f._1, f._2.toList.reverse.tail(0))).zipWithIndex().map(f => (f._2, f._1))
-  
+
   //val targets = instances.map { x => (x.toArray.toList.head, x.toArray.toList.tail) }
   //  .filter(f => f._2.reverse.head == "201605").map(f => (f._1, f._2.reverse.tail(0)))
   //  .sortByKey(true).zipWithIndex().map(f => (f._2, f._1))
 
-  //targets.join(predictions).map(f => f._2).saveAsTextFile("/user/odia/mackenzie/forecast/rslts")
+  //targets.join(predictions).map(f => f._2).saveAsTextFile("/user/myhome/myfolder/forecast/rslts")
 
   //targets.join(predictions).map(f => f._2._1 + "," + f._2._2.mkString(","))
-  //  .saveAsTextFile("/user/odia/mackenzie/forecast/rslts")
+  //  .saveAsTextFile("/user/myhome/myfolder/forecast/rslts")
 
   //sc.parallelize(predictor.instanceIndices).zipWithIndex().map(f => (f._2, f._1))
-  //.join(predictions).map(f => f._2._1 + "," + f._2._2.mkString(","))
-  //  .saveAsTextFile("/user/odia/mackenzie/forecast/rslts")
 
   val configs = net.getLayerWiseConfigurations.toJson()
 
@@ -106,12 +104,13 @@ class ChurnPredictorDriver(args: Array[String]) extends Serializable with Logs {
   val params = scala.util.parsing.json.JSONObject(net.paramTable().asScala.toMap).toString()
 
   //val configuration = new Configuration();
-  //configuration.set("fs.defaultFS", "hdfs://nn-galepartners.s3s.altiscale.com:8020")
-  
-  //val fs = FileSystem.get(configuration)  
-  //val os = fs.create(new Path("/user/odia/mackenzie/forecast/at_risk_model"))
+  //configuration.set("fs.defaultFS", "hdfs://nn-codorpartners.s3s.altiscale.com:8020")
+
+  //val fs = FileSystem.get(configuration)
+  //val os = fs.create(new Path("/user/myhome/myfolder/forecast/at_risk_model"))
   //os.write((configs + "\n" + params.toString()).getBytes)
-  
+
   info("CONFIGS:" + configs)
   info("PARAMS:" + params)
+
 }

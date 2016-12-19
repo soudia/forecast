@@ -1,4 +1,4 @@
-package com.gale.alchemy.forecast;
+package com.codor.alchemy.forecast;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
@@ -10,12 +10,14 @@ import org.nd4j.linalg.dataset.api.MultiDataSet;
 import org.nd4j.linalg.dataset.api.MultiDataSetPreProcessor;
 import org.nd4j.linalg.dataset.api.iterator.MultiDataSetIterator;
 
+import com.codor.alchemy.conf.Constants;
+
 public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiDataSetIterator {
 
 	private int vectorSize = 0;
 	private int labelSize = 0;
 	private final int batchSize;
-	private int numSteps = 5;
+	private int numSteps = 6;
 	private Stack<Path> stack = new Stack<Path>();
 
 	private StackSequenceRecordReader ssRecordReader;
@@ -31,7 +33,7 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 	}
 
 	public AdvisorMDSIterator(String dataDirectory, int batchSize, boolean train, int vectorSize, int labelSize) {
-		this(dataDirectory, batchSize, train, vectorSize, labelSize, 5);
+		this(dataDirectory, batchSize, train, vectorSize, labelSize, Constants.END_SEQ() - Constants.START_SEQ() + 1);
 	}
 
 	public AdvisorMDSIterator(String dataDirectory, int batchSize, boolean train, int vectorSize, int labelSize,
@@ -43,7 +45,7 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 		this.hdfsUrl = HDFS_URL + dataDirectory + (train ? "/train" : "/test");
 		this.vectorSize = vectorSize;
 		this.labelSize = labelSize;
-		ssRecordReader = new StackSequenceRecordReader(fs);
+		ssRecordReader = new StackSequenceRecordReader(fs, Constants.START_SEQ(), Constants.END_SEQ());
 		this.numSteps = train ? numSteps : 1;
 	}
 
@@ -71,7 +73,11 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 		try {
 			if (!hdfsIterator.hasNext())
 				throw new NoSuchElementException();
-			return nextMultiDataSet(num);
+			MultiDataSet mds = nextMultiDataSet(num);
+			while (mds == null && hdfsIterator.hasNext()) {
+				mds = nextMultiDataSet(num);
+			}
+			return mds;
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -80,12 +86,12 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 	private void pushAndClear(Path path, String index) {
 		String p = stack.isEmpty() ? "" : stack.peek().toUri().toString();
 		if (p.contains(index.split("_")[0])) {
-                	stack.push(path);
-                } else {
-                	ssRecordReader.newRecord(stack);
-                	stack.push(path);
-                }
-                ssRecordReader.newRecord(stack);
+			stack.push(path);
+		} else {
+			ssRecordReader.newRecord(stack);
+			stack.push(path);
+		}
+		ssRecordReader.newRecord(stack);
 	}
 
 	private MultiDataSet nextMultiDataSet(int num) throws IOException {
@@ -93,6 +99,8 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 
 		for (int i = 0; i < num && hdfsIterator.hasNext(); i++) {
 			for (int j = 0; j < numSteps; j++) {
+				if (!hdfsIterator.hasNext())
+					break;
 				LocatedFileStatus next = hdfsIterator.next();
 				Path path = next.getPath();
 
@@ -100,14 +108,14 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 				String index = getRelativeFilename(currentPath);
 
 				if (previousPath.contains(index.split("_")[0])) {
-					if (i >= num - 1 || !hdfsIterator.hasNext()) {
+					if (j >= numSteps - 1 || !hdfsIterator.hasNext()) {
 						pushAndClear(path, index);
 					} else {
 						stack.push(path);
 					}
 					previousPath = currentPath;
 				} else {
-					if (i >= num - 1 || !hdfsIterator.hasNext()) {
+					if (j >= numSteps - 1 || !hdfsIterator.hasNext()) {
 						pushAndClear(path, index);
 					}
 					ssRecordReader.newRecord(stack);
@@ -124,22 +132,22 @@ public class AdvisorMDSIterator extends BaseDataSetIterator implements MultiData
 
 	@Override
 	public void reset() {
-
+		initialize();
 	}
 
 	@Override
 	public boolean resetSupported() {
-		return false;
+		return true;
 	}
 
 	@Override
 	public void setPreProcessor(MultiDataSetPreProcessor preprocessor) {
 
 	}
-	
-	@Override
-    	public void remove() {
-        	throw new UnsupportedOperationException("Remove not supported");
-    	}
-}
 
+	@Override
+	public void remove() {
+		throw new UnsupportedOperationException("Remove not yet supported");
+	}
+}
+>>>>>>> 8190ec2 Committing new changes

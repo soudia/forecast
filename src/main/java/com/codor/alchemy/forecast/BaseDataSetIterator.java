@@ -1,8 +1,6 @@
-package com.gale.alchemy.forecast;
+package com.codor.alchemy.forecast;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.StringTokenizer;
 
 import org.apache.hadoop.conf.Configuration;
@@ -18,8 +16,8 @@ public class BaseDataSetIterator {
 	protected volatile FileSystem fs;
 	protected volatile String hdfsUrl;
 
-	static final String HDFS_URL = "hdfs://nn-galepartners.s3s.altiscale.com:8020";
-	static final String DATA_DIR = "/user/odia/mackenzie/lstm_recos/";
+	static final String HDFS_URL = "hdfs://nn-codorpartners.s3s.altiscale.com:8020";
+	static final String DATA_DIR = "/user/myhome/myfolder/lstm_recos/";
 	private static final String CORE_SITE = "/etc/hadoop-2.7.1/core-site.xml";
 	private static final String HDFS_SITE = "/etc/hadoop-2.7.1/hdfs-site.xml";
 
@@ -27,8 +25,8 @@ public class BaseDataSetIterator {
 		this.hdfsUrl = hdfsUrl;
 		initialize();
 	}
-	
-	private void initialize() {
+
+	final void initialize() {
 
 		Configuration configuration = new Configuration();
 		configuration.addResource(new Path(CORE_SITE));
@@ -54,4 +52,3 @@ public class BaseDataSetIterator {
 		return index;
 	}
 }
-

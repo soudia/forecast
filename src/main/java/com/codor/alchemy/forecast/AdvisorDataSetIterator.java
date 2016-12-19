@@ -1,4 +1,4 @@
-package com.gale.alchemy.forecast;
+package com.codor.alchemy.forecast;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -20,23 +20,21 @@ import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.factory.Nd4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.gale.alchemy.conf.Configs;
-
+import com.codor.alchemy.conf.Configs;
 public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataSetIterator {
 
 	private static final long serialVersionUID = -8938692790057042187L;
 
 	private int cursor = 0;
+	private int position = 0;
 	private int vectorSize = 0;
 	private int labelSize = 0;
 	private int numRows;
-	private int position = 0;
+
 	private final int batchSize;
 
-	private volatile String hdfsUrl;
 	private List<String> advisors = new ArrayList<String>();
 	private List<String> exclude = new ArrayList<String>();
-	
 
 	private List<Integer> featureInd = new ArrayList<Integer>();
 
@@ -51,6 +49,7 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 	}
 
   	public AdvisorDataSetIterator(String dataDirectory, int batchSize, boolean train, int vectorSize, int labelSize) {
+
 		super(HDFS_URL + dataDirectory + (train ? "/train" : "/test"));
 		this.batchSize = batchSize;
 		int pos = dataDirectory.lastIndexOf("/");
@@ -129,7 +128,7 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 			index = pathTokens.nextToken();
 		}
 		return exclude.contains(index);
-	} 
+	}
 
 	private void populate(INDArray features, INDArray labels, Path path) throws IOException {
 		Reader reader = new InputStreamReader(fs.open(path));
@@ -156,21 +155,19 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 	}
 
 	private DataSet nextDataSet(int num) throws IOException {
-		List<List<Double>> instances = new ArrayList<List<Double>>(num);
-		List<Double> targets = new ArrayList<Double>();
-		
 		INDArray labels = Nd4j.create(numRows, labelSize); // one class
 		INDArray features = Nd4j.create(numRows, vectorSize);
 		position = numRows - 1;
-		
+
 		Stack<Path> stack = new Stack<Path>();
 		String previousPath = "";
 
+
 		for (int i = 0; i < num && hdfsIterator.hasNext(); i++) {
-			
+
 			LocatedFileStatus next = hdfsIterator.next();
 			Path path = next.getPath();
-			
+
 			String currentPath = path.toUri().getPath();
 			String index = getRelativeFilename(currentPath);
 
@@ -183,17 +180,18 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 							populate(features, labels, stack.pop());
 						}
 					} else {
-						labels = Nd4j.create(labelSize);//(numRows, labelSize);
-						features = Nd4j.create(vectorSize);//(numRows, vectorSize);
+						labels = Nd4j.create(labelSize);// (numRows, labelSize);
+						features = Nd4j.create(vectorSize);// (numRows,
+															// vectorSize);
 						populate(features, labels, path);
 					}
 				} else {
 					stack.push(path);
-				}			
+				}
 				previousPath = currentPath;
 			} else {
-				labels = Nd4j.create(labelSize);//(numRows, labelSize);
-				features = Nd4j.create(vectorSize);//(numRows, vectorSize);
+				labels = Nd4j.create(labelSize);// (numRows, labelSize);
+				features = Nd4j.create(vectorSize);// (numRows, vectorSize);
 				while (!stack.isEmpty()) {
 					populate(features, labels, stack.pop());
 				}
@@ -201,7 +199,7 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 				stack.push(path);
 			}
 		}
-		return new DataSet(features, labels);//, null, labelsMask);
+		return new DataSet(features, labels);// , null, labelsMask);
 	}
 
 	@Override
@@ -210,21 +208,8 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 	}
 
 	@Override
-	public void reset() {
-		try {
-			hdfsIterator = fs.listFiles(new Path(hdfsUrl), true);
-		} catch (IllegalArgumentException | IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	@Override
 	public boolean resetSupported() { // TODO
 		return false;
-	}
-	
-	public List<String> getAdvisors() {
-		return advisors;
 	}
 
 	@Override
@@ -240,9 +225,22 @@ public class AdvisorDataSetIterator extends BaseDataSetIterator implements DataS
 	public int totalOutcomes() { // TODO
 		return labelSize;
 	}
-	
+
 	public void remove() {
-		
+
+	}
+
+	public List<String> getAdvisors() {
+		return advisors;
+	}
+
+	@Override
+	public void reset() {
+		try {
+			hdfsIterator = fs.listFiles(new Path(hdfsUrl), true);
+		} catch (IllegalArgumentException | IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 }

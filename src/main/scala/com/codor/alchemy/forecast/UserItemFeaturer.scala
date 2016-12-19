@@ -1,12 +1,12 @@
-package com.gale.alchemy.forecast
+package com.codor.alchemy.forecast
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.RDD.rddToOrderedRDDFunctions
 import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
 
-import com.gale.alchemy.forecast.utils.Logs
-import com.gale.alchemy.forecast.utils.SmartStringArray
+import com.codor.alchemy.forecast.utils.Logs
+import com.codor.alchemy.forecast.utils.SmartStringArray
 import com.typesafe.config.Config
 
 class UserItemFeaturer(config: Config, sc: SparkContext, nonulls: RDD[SmartStringArray]) extends Logs {
@@ -17,7 +17,8 @@ class UserItemFeaturer(config: Config, sc: SparkContext, nonulls: RDD[SmartStrin
   /**
    * Featurizes the input data
    */
-  def featurize(): RDD[(Long, (String, Iterable[(String, String, Double)]))] = {
+  
+  def featurize() = {
 
     val riskScoreIndex = 2
     val riskScore = nonulls.map { t =>
@@ -61,45 +62,39 @@ class UserItemFeaturer(config: Config, sc: SparkContext, nonulls: RDD[SmartStrin
       .flatMap(f => f).groupByKey().map(f => (users.indexOf(f._1).toLong, f))
   }
 
-  def createList(size: Int) : List[Double] = {
-   var list = Array[Double]()
-   (0 until size).foreach { i => list = list :+ 0.0 }
-   list.toList
-  }
-  
   /**
    * Generates the embeddings for every (advisor, yearmon) combination.
    */
-  def getEmbeddings(factors: RDD[(Long, Array[Double])]): RDD[((String, Int), (List[Double], List[Double]))] = {
+  def getEmbeddings(factors: RDD[(Long, Array[Double])]) = {
 
     val features = featurize()
 
     val itemFactors = factors.filter(f => f._1 >= users.size && f._1 < users.size +
       items.size).map(f => (f._1, f._2)).collect().map(f => f._2)
+    val size = itemFactors(0).size
+    val flattened = itemFactors.flatMap { x => x }
 
     //user index, (user, Iterable[(item, yearmon, Double)], fmFactor)
     val userFactors = features.join(factors).map(f => (f._2._1._1, f._2._1._2, f._2._2))
 
     userFactors.map { t =>
-      var label = createList(items.size)
+      var label: List[Double] = List.fill(items.size)(0.0)
       val featureMap = t._2.map(f => (f._1, f._3)).groupBy(f => f._1).map(f => (f._1,
         f._2.map(t => t._2).toList))
       featureMap.keysIterator.foreach { x => label = label.updated(items.indexOf(x), 1.0) }
 
       t._2.map { u =>
-        val size = itemFactors(0).size
-        //var embedding = List.fill(111 * (1 + size))(0.0)
-        var embedding = createList(items.size * (1 + size))
+        var embedding = List.fill((items.size + 1) * size)(0.0)
         (0 until t._3.size).foreach { i => embedding = embedding.updated(i, t._3(i)) }
 
-        val index = itemFactors.indexOf(u._1)
+        val index = items.indexOf(u._1)
         ((size * (1 + index)) until (size * (1 + index) + size)).foreach { i =>
-          embedding = embedding.updated(i, itemFactors(index)(i))
+          embedding = embedding.updated(i, flattened(i - size))
         }
         embedding = embedding ::: featureMap.getOrElse(u._1, List())
         // yearmon converted to int to be able to sort in decreasing order
         ((t._1, u._2.toInt), (embedding, label))
       }
-    }.flatMap(f => f)
+    }.flatMap(f => f).sortByKey(false)
   }
 }
